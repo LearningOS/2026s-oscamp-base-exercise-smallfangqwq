@@ -121,8 +121,8 @@ pub unsafe fn switch_context(old: &mut TaskContext, new: &TaskContext) {
         "ld s9, 88(a1)",   // Load s9 from offset 88
         "ld s10, 96(a1)",   // Load s10 from offset 96
         "ld s11, 104(a1)",   // Load s11 from offset 104
+        "ret"
     }
-    // todo!("save callee-saved regs to old, load from new, then ret; use #[unsafe(naked)] + naked_asm!, see module doc for riscv64 ABI and layout")
 }
 
 const STACK_SIZE: usize = 1024 * 64;
@@ -130,11 +130,9 @@ const STACK_SIZE: usize = 1024 * 64;
 /// Allocate a stack for a coroutine. Returns `(buffer, stack_top)` where `stack_top` is the high address
 /// (stack grows down). The buffer must be kept alive for the lifetime of the context using this stack.
 pub fn alloc_stack() -> (Vec<u8>, usize) {
-    // todo!("allocate stack buffer, return (buffer, stack_top) with stack_top 16-byte aligned")
     let mut buf = vec![0u8; STACK_SIZE];
-    let top = buf.as_ptr() as usize + STACK_SIZE;
-    let aligned_top = top & !0xF; // Align to 16 bytes
-    (buf, aligned_top)
+    let stack_top = buf.as_ptr() as usize + STACK_SIZE;
+    (buf, stack_top)
 }
 
 #[cfg(test)]

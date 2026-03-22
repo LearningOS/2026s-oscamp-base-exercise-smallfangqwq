@@ -145,7 +145,7 @@ impl Scheduler {
                 ..Default::default()
             },
             state: ThreadState::Ready,
-            _stack: Some(alloc_stack().0),
+            _stack: None,
             entry: Some(entry),
         });
     }
