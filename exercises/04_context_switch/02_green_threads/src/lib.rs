@@ -14,7 +14,7 @@
 //! The scheduler round-robins among ready threads. User entry is wrapped by `thread_wrapper`, which
 //! calls the entry then marks the thread `Finished` and switches back.
 
-#![cfg(target_arch = "riscv64")]
+// #![cfg(target_arch = "riscv64")]
 
 use core::arch::naked_asm;
 
@@ -48,6 +48,7 @@ pub enum ThreadState {
     Finished,
 }
 
+#[derive(Debug)]
 struct GreenThread {
     ctx: TaskContext,
     state: ThreadState,
@@ -146,7 +147,7 @@ impl Scheduler {
         //todo!("alloc stack, init ctx with ra=thread_wrapper and aligned sp, push GreenThread(Ready, entry)")
         self.threads.push(GreenThread {
             ctx: TaskContext {
-                sp: ((alloc_stack().1 - 16) & !15) as u64,
+                sp: (alloc_stack().1) as u64,
                 ra: thread_wrapper as *const () as u64,
                 ..Default::default()
             },
@@ -163,9 +164,13 @@ impl Scheduler {
     /// 3. Clear `SCHEDULER` when done.
     pub fn run(&mut self) {
        // todo!("set SCHEDULER to self, loop until threads[1..] all Finished, call schedule_next, then clear SCHEDULER")
-        self.threads[0].state = ThreadState::Running;
-        unsafe { SCHEDULER = self as *mut Scheduler };
-        while self.threads[1..].iter().any(|t| t.state != ThreadState::Finished) {
+        unsafe { SCHEDULER = self };
+        // println!("qwq");
+        loop {
+            let flag = self.threads.iter().skip(1).any(|t| t.state != ThreadState::Finished);
+            if !flag {
+                break;
+            }
             self.schedule_next();
         }
         unsafe { SCHEDULER = std::ptr::null_mut() };
@@ -173,24 +178,22 @@ impl Scheduler {
 
     /// Find the next ready thread (starting from `current + 1` round-robin), mark current as `Ready` (if not `Finished`), mark next as `Running`, set `CURRENT_THREAD_ENTRY` if the next thread has an entry, then switch to it.
     fn schedule_next(&mut self) {
-    //    todo!("round-robin find next Ready, set current Ready (if not Finished), next Running, CURRENT_THREAD_ENTRY, then switch_context")
-        let next = (self.current + 1..self.threads.len())
-            .chain(0..=self.current)
-            .find(|&i| self.threads[i].state == ThreadState::Ready)
-            .unwrap_or(self.current);
-        if self.threads[self.current].state != ThreadState::Finished {
-            self.threads[self.current].state = ThreadState::Ready;
+        let now_idx = self.current;
+        let nxt_idx = 'scope: {
+            for i in (now_idx + 1..self.threads.len()).chain(0..=now_idx) {
+                if self.threads[i].state == ThreadState::Ready {
+                    break 'scope i;
+                }
+            }
+            break 'scope now_idx;
+        };
+        // println!("switching from {} to {}", now_idx, nxt_idx);
+        self.current = nxt_idx;
+        let last_ctx = self.threads[now_idx].ctx.as_mut_ptr();
+        unsafe {
+            CURRENT_THREAD_ENTRY = self.threads[nxt_idx].entry;
+            switch_context(&mut *last_ctx,&*self.threads[nxt_idx].ctx.as_ptr());
         }
-        self.threads[next].state = ThreadState::Running;
-
-        if let Some(entry) = self.threads[next].entry.take() {
-            unsafe { CURRENT_THREAD_ENTRY = Some(entry) };
-        }
-
-        let current_ctx = &mut self.threads[self.current].ctx.clone();
-        let next_ctx = &self.threads[next].ctx;
-        self.current = next;
-        unsafe { switch_context(current_ctx, next_ctx) };
     }
 }
 
