@@ -115,6 +115,12 @@ pub struct Scheduler {
     current: usize,
 }
 
+pub fn alloc_stack() -> (Vec<u8>, usize) {
+    let mut stack = vec![0u8; STACK_SIZE];
+    let top = stack.as_mut_ptr() as usize + STACK_SIZE;
+    (stack, top)
+}
+
 impl Scheduler {
     pub fn new() -> Self {
         let main_thread = GreenThread {
@@ -141,7 +147,7 @@ impl Scheduler {
         self.threads.push(GreenThread {
             ctx: TaskContext {
                 sp: ((alloc_stack().1 - 16) & !15) as u64,
-                ra: thread_wrapper as u64,
+                ra: thread_wrapper as *const () as u64,
                 ..Default::default()
             },
             state: ThreadState::Ready,
@@ -172,7 +178,6 @@ impl Scheduler {
             .chain(0..=self.current)
             .find(|&i| self.threads[i].state == ThreadState::Ready)
             .unwrap_or(self.current);
-
         if self.threads[self.current].state != ThreadState::Finished {
             self.threads[self.current].state = ThreadState::Ready;
         }
@@ -182,7 +187,7 @@ impl Scheduler {
             unsafe { CURRENT_THREAD_ENTRY = Some(entry) };
         }
 
-        let current_ctx = &mut self.threads[self.current].ctx;
+        let current_ctx = &mut self.threads[self.current].ctx.clone();
         let next_ctx = &self.threads[next].ctx;
         self.current = next;
         unsafe { switch_context(current_ctx, next_ctx) };

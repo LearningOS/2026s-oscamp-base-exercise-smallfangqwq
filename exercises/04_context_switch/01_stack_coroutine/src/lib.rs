@@ -88,7 +88,7 @@ impl TaskContext {
 ///
 /// Must be `#[unsafe(naked)]` to prevent the compiler from generating a prologue/epilogue.
 #[unsafe(naked)]
-pub unsafe fn switch_context(old: &mut TaskContext, new: &TaskContext) {
+pub unsafe extern "C" fn switch_context(old: &mut TaskContext, new: &TaskContext) {
     naked_asm! {
         // Save callee-saved registers to old context
         "sd sp, 0(a0)",   // Save sp at offset 0
