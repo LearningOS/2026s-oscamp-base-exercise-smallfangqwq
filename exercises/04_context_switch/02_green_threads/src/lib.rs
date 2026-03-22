@@ -117,9 +117,10 @@ pub struct Scheduler {
 }
 
 pub fn alloc_stack() -> (Vec<u8>, usize) {
-    let mut stack = vec![0u8; STACK_SIZE];
+    let stack = Box::new(vec![0u8; STACK_SIZE]);
+    let stack= Box::leak(stack);
     let top = stack.as_mut_ptr() as usize + STACK_SIZE;
-    (stack, top)
+    (stack.to_vec(), top)
 }
 
 impl Scheduler {
@@ -163,7 +164,6 @@ impl Scheduler {
     /// 2. Loop: if all threads in `threads[1..]` are `Finished`, break; otherwise call `schedule_next()` (which may switch away and later return).
     /// 3. Clear `SCHEDULER` when done.
     pub fn run(&mut self) {
-       // todo!("set SCHEDULER to self, loop until threads[1..] all Finished, call schedule_next, then clear SCHEDULER")
         unsafe { SCHEDULER = self };
         // println!("qwq");
         loop {
@@ -186,6 +186,14 @@ impl Scheduler {
                 }
             }
             break 'scope now_idx;
+        };
+        if now_idx == nxt_idx {
+            return;
+        }
+        self.threads[now_idx].state = if self.threads[now_idx].state == ThreadState::Finished {
+            ThreadState::Finished
+        } else {
+            ThreadState::Ready
         };
         // println!("switching from {} to {}", now_idx, nxt_idx);
         self.current = nxt_idx;
